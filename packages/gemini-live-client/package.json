@@ -27,6 +27,6 @@
         "email": "seba.morales.lorca@gmail.com"
     },
     "dependencies": {
-        "ws": "^8.18.2"
+        "@google/genai": "^1.41.0"
     }
 }

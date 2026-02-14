@@ -1,3 +1,4 @@
+import { Modality } from '@google/genai';
 import { Tw2GemServer } from '@tw2gem/server';
 
 const tw2gemServer = () => {
@@ -10,10 +11,10 @@ const tw2gemServer = () => {
             server: {
                 apiKey: process.env.GOOGLE_API_KEY1,
             },
-            setup: {
+            params: {
                 model: 'models/gemini-2.0-flash-live-001',
-                generationConfig: {
-                    responseModalities: ['audio'],
+                config: {
+                    responseModalities: [Modality.AUDIO],
                     speechConfig: {
                         voiceConfig: {
                             prebuiltVoiceConfig: {
@@ -22,11 +23,11 @@ const tw2gemServer = () => {
                         },
                         languageCode: 'es-US'
                     },
-                },
-                systemInstruction: {
-                    parts: [{ text: 'Eres un asistente virtual de la tienda online store.com' }]
-                },
-                tools: []
+                    systemInstruction: {
+                        parts: [{ text: 'Eres un asistente virtual de la tienda online store.com' }]
+                    },
+                    tools: []
+                }
             }
         }
     });

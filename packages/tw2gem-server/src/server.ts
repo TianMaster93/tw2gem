@@ -1,5 +1,5 @@
 import { TwilioMediaEvent, TwilioServerOptions, TwilioWebSocketServer } from '@tw2gem/twilio-server';
-import { BidiGenerateContentServerContent, GeminiLiveClient } from '@tw2gem/gemini-live-client';
+import { GeminiLiveClient, LiveServerContent } from '@tw2gem/gemini-live-client';
 import { Tw2GemGeminiEvents, Tw2GemServerOptions, Tw2GemSocket } from './server.dto';
 import { AudioConverter } from '@tw2gem/audio-converter';
 
@@ -30,7 +30,7 @@ export class Tw2GemServer extends TwilioWebSocketServer {
                 };
 
                 geminiClient.onError = (error) => {
-                    this.onError?.(socket, error);
+                    this.onError?.(socket, <any> error);
                 };
 
                 geminiClient.onServerContent = (serverContent) => {
@@ -63,7 +63,7 @@ export class Tw2GemServer extends TwilioWebSocketServer {
         });
     }
 
-    public onServerContent(socket: Tw2GemSocket, serverContent: BidiGenerateContentServerContent) {
+    public onServerContent(socket: Tw2GemSocket, serverContent: LiveServerContent) {
         if (!socket.twilioStreamSid || !socket.geminiClient || !serverContent.modelTurn?.parts?.length)
             return;
 
@@ -73,8 +73,15 @@ export class Tw2GemServer extends TwilioWebSocketServer {
         if (!inlineData?.length)
             return;
 
-        const base64Mulaws = inlineData.map(lineData => AudioConverter.convertBase64PCM24kToBase64MuLaw8k(lineData!.data));
+        const base64Mulaws = inlineData.map(lineData => {
+            if (lineData?.data) {
+                return AudioConverter.convertBase64PCM24kToBase64MuLaw8k(lineData.data);
+            }
+        });
+        
         for (const audios of base64Mulaws) {
+            if (!audios)
+                continue;
             socket.sendMedia({
                 streamSid: socket.twilioStreamSid,
                 media: {

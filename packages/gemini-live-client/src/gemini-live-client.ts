@@ -1,82 +1,67 @@
-import { BidiGenerateContentRealtimeInput, BidiGenerateContentServerContent, BidiGenerateContentServerMessage, BidiRequest, GeminiLiveClientOptions } from './gemini-live.dto';
-import { CloseEvent, ErrorEvent, MessageEvent, WebSocket } from 'ws';
+import { GoogleGenAI, LiveSendRealtimeInputParameters, LiveServerContent, LiveServerMessage, Session } from "@google/genai";
+import { GeminiLiveClientOptions } from "./gemini-live.dto";
 
 export class GeminiLiveClient {
 
-    private static readonly DEFAULT_GEMINI_BIDI_SERVER = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent';
-
-    private socket: WebSocket;
+    private googleGenAI: GoogleGenAI;
+    private session: Session;
     public isReady: boolean;
 
     public onReady?: () => void;
     public onError?: (event: ErrorEvent) => void;
     public onClose?: (event: CloseEvent) => void;
-    public onServerContent?: (serverContent: BidiGenerateContentServerContent) => void;
+    public onServerContent?: (serverContent: LiveServerContent) => void;
 
     constructor(
         private options: GeminiLiveClientOptions
     ) {
-        const server = options.server;
-        const baseUrl = server?.url || GeminiLiveClient.DEFAULT_GEMINI_BIDI_SERVER;
-        const queryParams = server?.apiKey ? `key=${server.apiKey}` : '';
+        this.googleGenAI = new GoogleGenAI({
+            apiKey: options.server.apiKey
+        });
 
-        const url = `${baseUrl}?${queryParams}`;
-        this.socket = new WebSocket(url);
-
-        this.socket.onopen = this.sendSetup.bind(this);
-        this.socket.onmessage = this.handlerMessage.bind(this);
-
-        this.socket.onerror = (event) => {
-            this.isReady = false;
-            this.onError?.(event);
-        };
-
-        this.socket.onclose = (event) => {
-            this.isReady = false;
-            this.onClose?.(event);
-        };
+        void this.startSession();
     }
 
-    protected sendSetup() {
-        const jsonPayload = JSON.stringify({ setup: this.options.setup });
-        this.socket.send(jsonPayload);
+    private async startSession() {
+        this.session = await this.googleGenAI.live.connect({
+            model: this.options.params.model,
+            config: this.options.params.config,
+            callbacks: {
+                onopen: () => {
+                    this.isReady = true;
+                },
+                onmessage: this.handlerMessage.bind(this),
+                onerror: (event) => {
+                    this.isReady = false;
+                    this.onError?.(event);
+                },
+                onclose: (event) => {
+                    this.isReady = false;
+                    this.onClose?.(event);
+                }
+            }
+        });
     }
 
-    protected async handlerMessage(event: MessageEvent) {
-        const isBuffer = event.data instanceof Buffer;
-        if (!isBuffer)
-            return; 
-        
-        const blob = event.data;
-        const text = blob.toString();
-        const obj: BidiGenerateContentServerMessage = JSON.parse(text);
-        if (obj.setupComplete) {
-            this.isReady = true;
-            return this.onReady?.();
-        }
-
-        if (obj.serverContent) {
-            return this.onServerContent?.(obj.serverContent);
+    protected async handlerMessage(message: LiveServerMessage) {
+        if (message.serverContent) {
+            return this.onServerContent?.(message.serverContent);
         }
     };
 
     public sendText(text: string) {
-        const realtimeInput: BidiGenerateContentRealtimeInput = { text };
-        this.send({ realtimeInput });
-    }
-
-    public sendRealTime(realTimeData: BidiGenerateContentRealtimeInput) {
-        this.send({ realtimeInput: realTimeData });
-    }
-
-    protected send(request: BidiRequest) {
-        if (!this.isReady)
+        if (!this.isReady || !this.session)
             return;
-        const jsonPayload = JSON.stringify(request);
-        this.socket.send(jsonPayload);
+        this.session.sendRealtimeInput({ text });
+    }
+
+    public sendRealTime(realTimeInput: LiveSendRealtimeInputParameters) {
+        if (!this.isReady || !this.session)
+            return;
+        this.session.sendRealtimeInput(realTimeInput);
     }
 
     public close() {
-        this.socket.close();
+        this.session.close();
     }
 }
